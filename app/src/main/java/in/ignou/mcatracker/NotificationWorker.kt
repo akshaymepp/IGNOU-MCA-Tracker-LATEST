@@ -18,8 +18,8 @@ class NotificationWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            val repository = AnnouncementRepository(applicationContext)
-            val announcements = repository.fetchAnnouncements()
+            val repository = AnnouncementRepository()
+            val announcements = repository.fetch()
 
             val preferences = applicationContext.getSharedPreferences(
                 "ignou_tracker",
@@ -31,18 +31,23 @@ class NotificationWorker(
                 emptySet()
             )?.toMutableSet() ?: mutableSetOf()
 
-            val currentIds = announcements.map { it.id }.toSet()
+            // Use the announcement URL and title as a stable unique identifier.
+            val currentIds = announcements.map {
+                "${it.url}|${it.title}"
+            }.toSet()
 
             // First successful run: save existing announcements silently.
-            if (seenIds.isEmpty()) {
+            if (preferences.getBoolean("baseline_created", false).not()) {
                 preferences.edit()
                     .putStringSet("seen_announcement_ids", currentIds)
+                    .putBoolean("baseline_created", true)
                     .apply()
+
                 return Result.success()
             }
 
             val newAnnouncements = announcements.filter {
-                it.id !in seenIds
+                "${it.url}|${it.title}" !in seenIds
             }
 
             newAnnouncements.forEachIndexed { index, announcement ->
@@ -53,7 +58,9 @@ class NotificationWorker(
                 )
             }
 
-            val updatedIds = (seenIds + currentIds).toList().takeLast(500).toSet()
+            val updatedIds = (seenIds + currentIds).toList()
+                .takeLast(500)
+                .toSet()
 
             preferences.edit()
                 .putStringSet("seen_announcement_ids", updatedIds)
@@ -91,14 +98,16 @@ class NotificationWorker(
             MainActivity::class.java
         ).apply {
             putExtra("announcement_url", url)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
         val pendingIntent = PendingIntent.getActivity(
             applicationContext,
             notificationId,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(
