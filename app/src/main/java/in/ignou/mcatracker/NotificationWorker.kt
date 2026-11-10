@@ -31,13 +31,12 @@ class NotificationWorker(
                 emptySet()
             )?.toMutableSet() ?: mutableSetOf()
 
-            // Use the announcement URL and title as a stable unique identifier.
             val currentIds = announcements.map {
                 "${it.url}|${it.title}"
             }.toSet()
 
             // First successful run: save existing announcements silently.
-            if (preferences.getBoolean("baseline_created", false).not()) {
+            if (!preferences.getBoolean("baseline_created", false)) {
                 preferences.edit()
                     .putStringSet("seen_announcement_ids", currentIds)
                     .putBoolean("baseline_created", true)
@@ -46,10 +45,12 @@ class NotificationWorker(
                 return Result.success()
             }
 
+            // Identify announcements that have not been seen before.
             val newAnnouncements = announcements.filter {
                 "${it.url}|${it.title}" !in seenIds
             }
 
+            // Notify separately for every new announcement.
             newAnnouncements.forEachIndexed { index, announcement ->
                 showNotification(
                     announcement.title,
@@ -58,7 +59,9 @@ class NotificationWorker(
                 )
             }
 
-            val updatedIds = (seenIds + currentIds).toList()
+            // Keep only the latest 500 announcement identifiers.
+            val updatedIds = (seenIds + currentIds)
+                .toList()
                 .takeLast(500)
                 .toSet()
 
@@ -84,6 +87,7 @@ class NotificationWorker(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
 
+        // Create notification channel for Android 8.0 and above.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -93,6 +97,7 @@ class NotificationWorker(
             manager.createNotificationChannel(channel)
         }
 
+        // Open the app when the notification is tapped.
         val intent = Intent(
             applicationContext,
             MainActivity::class.java
@@ -110,6 +115,7 @@ class NotificationWorker(
                 PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Build notification.
         val notification = NotificationCompat.Builder(
             applicationContext,
             channelId
@@ -117,7 +123,9 @@ class NotificationWorker(
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("IGNOU MCA Update")
             .setContentText(title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(title))
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(title)
+            )
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
