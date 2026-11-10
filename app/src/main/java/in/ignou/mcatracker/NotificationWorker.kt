@@ -114,7 +114,7 @@ class NotificationWorker(
             applicationContext,
             channelId
         )
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("IGNOU MCA Update")
             .setContentText(title)
             .setStyle(NotificationCompat.BigTextStyle().bigText(title))
